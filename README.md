@@ -31,5 +31,5 @@ of Twitch and YouTube Gaming will be added soon.
 ## Credits
 
 * Thanks to Sam Herbert for nice SVG - http://goo.gl/7AJzbL
-* Licensed under - Creative Commons Attribution 3.0 License
+* Licensed under - [Creative Commons Attribution 3.0 License] (https://creativecommons.org/licenses/by/3.0/)
 * 2016 | Chat AutoPlaylist by Andrey Esenin aka bitPumpkin
