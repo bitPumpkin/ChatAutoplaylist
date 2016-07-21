@@ -1,0 +1,207 @@
+﻿<!DOCTYPE HTML>
+<html>
+	<head>
+		<title>GoodGame Chat AutoPlaylist</title>
+		<meta charset="utf-8" />
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+		<script src="http://cdn.jsdelivr.net/sockjs/1.0.3/sockjs.min.js"></script>
+		<script>
+			//Setting variables
+			var goodgame_chat_connection = "http://chat.goodgame.ru:8081/chat";
+			var goodgame_api_getStreamID = "http://goodgame.ru/api/getggchannelstatus?id=";
+			var videoUrlTemplate = "https://www.youtube.com/watch?v=";
+			var videoUrlTemplateShort = "https://youtu.be/";
+			var videoUrlOffset = videoUrlTemplate.length;
+			var videoUrlOffsetShort = videoUrlTemplateShort.length;
+			var videoIdLength = 11;
+			var keyWord = "channel";
+			var keyWordOffset = keyWord.length+1;
+			var stream_id;
+			var channelName;
+			var streamerName;
+			var isChannelJoined = false;
+			</script>
+			<link href='https://fonts.googleapis.com/css?family=Open+Sans&subset=latin,cyrillic' rel='stylesheet' type='text/css'>
+			<style>
+				body {
+					font-family: 'Open Sans', serif;
+					font-size: 14px;
+				}
+		</style>
+	</head>
+		<body>
+		<br><br>
+		<center>
+		<img src="app_img.png"><br>
+		<table border="0">
+		<tr>
+		<td><center><a href="plugin.php" target="_blank">Link Google account</a></center></td>
+		</tr>
+		<tr>
+		<td>Stream URL:<br> <input type="text" id="stream_url"> <input type="button" id="listen_btn" value="Start"></td>
+		</tr>
+		<tr>
+		<td height="55" align="center" valign="bottom"><div id="listening"><img src="three-dots.svg"></div>
+		<div id="serviceMessage" style="color:#ff0000;" align="center"></div></td>
+		</tr>
+		<tr>
+		<td><p align="center"><b><a href="about.html" target="_blank">About</a></b></p></td>
+		</tr>
+		</table>
+		</center>
+			<script>
+			var sock = null;
+			var tickNumber = 0;
+			var ping = null;
+			
+			sockConnect();
+			
+			function sockConnect() {
+				sock = new SockJS(goodgame_chat_connection);
+				
+				sock.onopen = function() {
+					console.log('open');
+					tickNumber = 0;
+					if (isChannelJoined)
+					{
+						joinChatChannel(stream_id);
+						$('#listening').show();
+					}					
+					$('#serviceMessage').hide();
+				};
+				
+				sock.onmessage = function(e) {
+					chatMonitoring(e);
+				};
+				
+				sock.onclose = function() {
+					console.log('close'); 
+					$('#listening').hide();
+					tickNumber++;
+					console.log("Connection lost, reconnect ("+tickNumber+")...");
+					if (isChannelJoined)
+					{
+						changeServiceMessage("Connection lost, reconnect ("+tickNumber+")...");
+					}
+					setTimeout(sockConnect, 2000);
+				};
+			};
+
+			function joinChatChannel(channel_id) {
+				sock.send('{ "type":"join", "data": {"channel_id":"'+channel_id+'", "hidden":"false"}}');
+			};
+			
+			function chatPing(serverResponse) {
+				ping = null;
+				setTimeout(function() {
+					if (ping == serverResponse)
+					{
+						sock.close();
+					}
+				}, 20000);
+				ping = serverResponse;
+			};
+			
+			function listenToVideoLink(e) {
+				console.log('message', e.data);
+				var gg_response = JSON.parse(e.data);
+				if (gg_response.type=="message")
+				{
+					if (!gg_response.data.text.indexOf(streamerName))
+					{
+						var isVideoLink = gg_response.data.text.indexOf(videoUrlTemplate);
+						var isVideoShortLink = gg_response.data.text.indexOf(videoUrlTemplateShort);
+						var videoId = 0;
+						if (isVideoLink>0)
+						{
+							videoId = gg_response.data.text.substring(isVideoLink+videoUrlOffset);
+						} else if (isVideoShortLink>0)
+						{
+							videoId = gg_response.data.text.substring(isVideoShortLink+videoUrlOffsetShort);
+						} else
+							return;
+						videoId=videoId.substring(0, videoIdLength);
+						$.post("plugin.php", {streamer: channelName, watch: videoId});
+						console.log("Video with id="+videoId+" was added to the playlist");
+					}
+				}
+			};
+			
+			function chatMonitoring(eMessage) {
+				chatPing(eMessage);
+				listenToVideoLink(eMessage);
+			};
+			
+			function changeServiceMessage(newMessage) {
+				document.getElementById('serviceMessage').innerHTML = newMessage;
+				$('#serviceMessage').show();
+			};
+			
+			$('#listening').hide();
+			$('#serviceMessage').hide();
+			$('#listen_btn').click(function() {
+				if (isChannelJoined)
+				{
+					sock.send('{ "type":"unjoin", "data": {"channel_id":"'+stream_id+'"}}');
+					isChannelJoined = false;
+					$('#listen_btn').val("Start");
+					$('#listening').hide();
+					$('#serviceMessage').hide();
+					return;
+				}
+				
+				channelName = $('#stream_url').val();
+				channelName=channelName.substring(channelName.indexOf(keyWord)+keyWordOffset);
+				var lastIndex=channelName.indexOf('/');
+				if (lastIndex>0)
+				{
+					channelName=channelName.substring(0,lastIndex);
+				}
+				
+				var XHR = ("onload" in new XMLHttpRequest()) ? XMLHttpRequest : XDomainRequest;
+				var xhr = new XHR();
+
+				xhr.open('GET', goodgame_api_getStreamID+channelName, true);
+
+				xhr.onload = function() {
+				   var channelInfoXML = $.parseXML(this.responseText),
+					$xml = $( channelInfoXML ),
+					$streamid = $xml.find("stream_id");
+					
+					stream_id = $streamid.text();
+					
+					joinChatChannel(stream_id);
+					sock.onmessage = function(e) {
+						console.log('message', e.data);
+						var joinResponse = JSON.parse(e.data);
+						if (joinResponse.type == "success_join")
+						{
+							streamerName = joinResponse.data.channel_streamer.name;
+							isChannelJoined = true;
+							$('#listen_btn').val("Stop");
+							$('#serviceMessage').hide();
+							$('#listening').show();
+						} else {
+							changeServiceMessage('Connection failured. Error: <br>'+joinResponse.data.errorMsg);
+						}
+					};
+					setTimeout( 'sock.onmessage = function(e) {chatMonitoring(e);};', 500);
+				}
+				
+				xhr.onerror = function() {
+					if (!this.status)
+					{
+						changeServiceMessage('Connection failured. Error: <br> GG server unavailable');
+					}
+					else
+					{
+						console.log('XHR Error: ' + this.status);
+					}				
+				}
+
+				xhr.send();
+				
+			});
+			</script>
+	</body>
+</html>
