@@ -1,7 +1,7 @@
 # Chat AutoPlaylist
 
 Chat AutoPlaylist - is a web application, that helps streamers to update stream playlists by 
-automatically adding to it compositions and video clips, which users leaves links to in the chat.
+automatically adding to it compositions and video clips, which users leave links to in the chat.
 The application works only with YouTube as a playlist service, so you must be authorised in your
 Google Account and give rights to the application, so it's allowed to create and update your 
 YouTube playlists. Chat Autoplaylist uses GoodGame as a streaming service for now, but support
